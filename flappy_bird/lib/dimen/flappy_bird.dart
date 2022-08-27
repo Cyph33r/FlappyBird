@@ -1,0 +1,1 @@
+const flappyBirdDimen = [65.0,65.0];
