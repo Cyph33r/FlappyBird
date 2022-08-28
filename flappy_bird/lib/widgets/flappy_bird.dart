@@ -24,8 +24,8 @@ class FlappyBird extends StatelessWidget {
     return Image.asset(
       "assets/images/${birdColor.name}bird-${flightStage.name}flap.png",
       fit: BoxFit.contain,
-      height: flappyBirdDimen[0],
-      width: flappyBirdDimen[1],
+      height: flappyBirdDimen['x'],
+      width: flappyBirdDimen['y'],
     );
   }
 }
