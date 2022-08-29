@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum Direction { upToDown, downToUp }
@@ -34,30 +33,26 @@ extension DoubleUtil on double {
 
   double dp(BuildContext context) {
     print(this);
-    final toReturn= this / MediaQuery.of(context).devicePixelRatio;
+    final toReturn = this / MediaQuery.of(context).devicePixelRatio;
     print(toReturn);
     print('');
     return toReturn;
   }
 }
 
-double toRadians(int degrees) {
+double toRadians(double degrees) {
   // if (degrees > 360|| degrees < 0) {
   //   throw UnsupportedError("invalid value for degrees: $degrees");
   // }
   return (degrees / 180) * pi;
 }
 
-class DebugContainer extends StatelessWidget {
-  final Widget child;
-
-  const DebugContainer({Key? key, required this.child}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: Colors.red)),
-      child: child,
-    );
+extension ListUtil on List {
+  List<K> mapIndexed<E, K>(K Function(int, E) action) {
+    final toReturn = <K>[];
+    for (int i = 0; i < length; i++) {
+      toReturn.add(action(i, this[i]));
+    }
+    return toReturn;
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'flappy_bird.dart';
+import 'screen/flappy_bird_game.dart';
 
 void main() {
   runApp(const HomePage());
