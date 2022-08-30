@@ -30,9 +30,9 @@ class FlappyBird extends StatelessWidget {
       angle: toRadians(rotationDeg),
       child: Image.asset(
         "assets/images/${birdColor.name}bird-${flightStage.name}flap.png",
-        fit: BoxFit.contain,
-        height: flappyBirdDimen['x'],
-        width: flappyBirdDimen['y'],
+        fit: BoxFit.cover,
+        height: flappyBirdDimen['y'],
+        width: flappyBirdDimen['x'],
       ),
     );
   }
