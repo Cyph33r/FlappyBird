@@ -7,13 +7,11 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flappy_bird/constants/constants.dart';
 import 'package:flappy_bird/util/util.dart';
 import 'package:flappy_bird/widgets/flappy_bird.dart';
-import 'package:flappy_bird/widgets/pipe.dart';
 import 'package:flutter/material.dart';
 
 import '../dimen/game_dimen.dart';
-import '../util/debug_container.dart';
 
-enum GameState { welcome, playing, ended }
+enum GameState { welcome, playing, ending, ended }
 
 enum PipeColor { green, red }
 
@@ -32,33 +30,59 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   AudioPlayer hitPlayer = AudioPlayer();
   AudioPlayer pointPlayer = AudioPlayer();
 
-  var gameState = GameState.welcome; //todo:change this back
+  Future<void> playWing() {
+    if (wingPlayer.state == PlayerState.playing) wingPlayer.stop();
+    return wingPlayer.play(AssetSource('audio/wing.wav'));
+  }
+
+  Future<void> playDie() {
+    if (diePlayer.state == PlayerState.playing) diePlayer.stop();
+    return diePlayer.play(AssetSource('audio/die.wav'));
+  }
+
+  Future<void> playHit() {
+    if (hitPlayer.state == PlayerState.playing) hitPlayer.stop();
+    return hitPlayer.play(AssetSource('audio/hit.wav'));
+  }
+
+  Future<void> playPoint() {
+    if (pointPlayer.state == PlayerState.playing) pointPlayer.stop();
+    return pointPlayer.play(AssetSource('audio/point.wav'));
+  }
+
+  var gameState = GameState.welcome;
   var backgroundState = BackgroundState.values[Random().nextInt(2)];
   var pipeColor = PipeColor.values[Random().nextInt(2)];
   var isUpdating = false;
   var baseShiftX = 0.0;
 
+  double visibleRotation = 0;
+
   @override
   void dispose() {
     wingPlayer.dispose();
+    diePlayer.dispose();
+    hitPlayer.dispose();
+    pointPlayer.dispose();
     super.dispose();
   }
 
   var playerScore = 0;
   var pipes = <Pipes>[];
   final pipeLocation = <Map<String, double>>[];
-  final flappybirdState = {
-    flappyBirdX: flappyBirdStartingPos['x'],
-    flappyBirdY: flappyBirdStartingPos['y'],
+  final wingLocations = [0, 1, 2, 1];
+  var wingPosIndex = 1;
+  var flappyBirdState = {
+    flappyBirdX: flappyBirdStartingPos['x']!,
+    flappyBirdY: flappyBirdStartingPos['y']!,
     flappyBirdRotationDeg: 0.0,
-    flappyBirdColor: BirdColor.red,
+    flappyBirdColor: BirdColor.values[Random().nextInt(3)],
     flappyBirdFlightStage: FlightStage.mid,
     flappyBirdIsJumping: false,
     flappyBirdDir: 1,
     heightToJump: 0,
+    flappyBirdIsFalling: false,
   };
-  var dt = 3; //FPSCLOCK.tick(FPS) / 1000
-  var pipeVelX = -128; //* dt;
 
   // player velocity, max velocity, downward acceleration, acceleration on flap
   var playerVelY =
@@ -66,9 +90,9 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   var playerMaxVelY = 10; // max vel along Y, max descend speed
   var playerMinVelY = -8; // min vel along Y, max ascend speed
   var playerAccY = 1; // players downward acceleration
-  var playerRot = 45; // player's rotation
-  var playerVelRot = 3; // angular speed
-  var playerRotThr = 20; // rotation threshold
+  // var playerRot = 45; // player's rotation
+  var playerVelRot = 1.2; // angular speed
+  var playerRotThr = -20.0; // rotation threshold
   var playerFlapAcc = -9; // players speed on flapping
   // var playerFlapped = false; True when player flaps
 
@@ -107,8 +131,10 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
     final height = MediaQuery.of(context).size.height -
         MediaQuery.of(context).padding.vertical;
     final width = MediaQuery.of(context).size.width;
-    if (gameState == GameState.playing) updatePipe();
-    checkCollision();
+    if (gameState == GameState.playing) {
+      updatePipe();
+      checkCollision();
+    }
     updateBird();
     isUpdating = false;
     return Scaffold(
@@ -137,17 +163,14 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                         ))),
                   //todo: get new bird
                   Positioned(
-                    left: flappybirdState[flappyBirdX] as double,
-                    top: flappybirdState[flappyBirdY] as double,
-                    child: DebugContainer(
-                      child: FlappyBird(
-                          birdColor:
-                              flappybirdState[flappyBirdColor]! as BirdColor,
-                          flightStage: flappybirdState[flappyBirdFlightStage]
-                              as FlightStage,
-                          rotationDeg:
-                              flappybirdState[flappyBirdRotationDeg] as double),
-                    ),
+                    left: flappyBirdState[flappyBirdX] as double,
+                    top: flappyBirdState[flappyBirdY] as double,
+                    child: FlappyBird(
+                        birdColor:
+                            flappyBirdState[flappyBirdColor]! as BirdColor,
+                        flightStage: flappyBirdState[flappyBirdFlightStage]
+                            as FlightStage,
+                        rotationDeg: visibleRotation),
                   ),
                   //todo: if game over, show the game over banner
                   //get new score
@@ -157,17 +180,6 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                       padding: const EdgeInsets.only(top: 64),
                       child: drawScores(),
                     ),
-                  Positioned(
-                    top: pipes.length > 1
-                        ? gameAreaHeight - pipes[1].bottomHeight
-                        : 0,
-                    child: Container(
-                      height: 1,
-                      width: screenDimen['x'],
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.purple)),
-                    ),
-                  ),
                   // if welcome show welcome banner
                   if (gameState == GameState.welcome)
                     Positioned(
@@ -189,15 +201,16 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
         gameState = GameState.playing;
         break;
       case GameState.playing:
-        flappybirdState[flappyBirdIsJumping] = true;
-        if (wingPlayer.state == PlayerState.playing) {
-          wingPlayer.stop();
+        if (upDown == 1) {
+          flappyBirdState[flappyBirdIsJumping] = true;
+          playWing();
         }
-
-        flappybirdState[flappyBirdDir] = upDown == 0 ? 1 : -1;
         break;
       case GameState.ended:
+        resetGame();
         return;
+      case GameState.ending:
+        break;
     }
   }
 
@@ -211,6 +224,14 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   Widget drawScores() {
+    if (pipeLocation.isNotEmpty &&
+        (flappyBirdState[flappyBirdX] as double).inRange(
+            pipeLocation[0]['x']! + pipeWidth,
+            pipeLocation[0]['x']! + 4 + pipeWidth)) {
+      playPoint();
+      playerScore++;
+    }
+
     final scoreToString = playerScore.toString();
     final digitImage = <Widget>[];
     for (String digit in scoreToString.split("")) {
@@ -261,73 +282,171 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   void updateBird() {
+    if (gameState == GameState.welcome || gameState == GameState.playing) {
+      wingPosIndex = wingPosIndex == 3 ? 0 : wingPosIndex + 1;
+      flappyBirdState[flappyBirdFlightStage] =
+          FlightStage.values[wingLocations[wingPosIndex]];
+    }
     switch (gameState) {
       case GameState.welcome:
-        if (abs((flappybirdState[flappyBirdY] as double) -
+        if (abs((flappyBirdState[flappyBirdY] as double) -
                 (flappyBirdStartingPos['y'] as double)) ==
             10.0) {
-          flappybirdState[flappyBirdDir] =
-              (flappybirdState[flappyBirdDir] as int) * -1;
+          flappyBirdState[flappyBirdDir] =
+              (flappyBirdState[flappyBirdDir] as int) * -1;
         }
-        if (flappybirdState[flappyBirdDir] == -1) {
-          flappybirdState[flappyBirdY] =
-              (flappybirdState[flappyBirdY] as double) - 1;
+        if (flappyBirdState[flappyBirdDir] == -1) {
+          flappyBirdState[flappyBirdY] =
+              (flappyBirdState[flappyBirdY] as double) - 1;
         }
-        if (flappybirdState[flappyBirdDir] == 1) {
-          flappybirdState[flappyBirdY] =
-              (flappybirdState[flappyBirdY] as double) + 1;
+        if (flappyBirdState[flappyBirdDir] == 1) {
+          flappyBirdState[flappyBirdY] =
+              (flappyBirdState[flappyBirdY] as double) + 1;
         }
         break;
-      case GameState.playing:
+      case GameState.playing: //update the rotation angle
+        //check if the player flapped
+        if (flappyBirdState[flappyBirdIsJumping] as bool) {
+          flappyBirdState[flappyBirdRotationDeg] = -45.0;
+          playerVelY = playerFlapAcc;
+          flappyBirdState[flappyBirdIsJumping] = true;
+        }
+        //update rotation
+        flappyBirdState[flappyBirdRotationDeg] =
+            (flappyBirdState[flappyBirdRotationDeg] as double) + playerVelRot;
+        if ((flappyBirdState[flappyBirdRotationDeg] as double) >= 90) {
+          flappyBirdState[flappyBirdRotationDeg] = 90.0;
+        }
+        visibleRotation = playerRotThr.toDouble();
+        if ((flappyBirdState[flappyBirdRotationDeg] as double) >=
+            playerRotThr) {
+          visibleRotation = flappyBirdState[flappyBirdRotationDeg] as double;
+        }
+        flappyBirdState[flappyBirdRotationDeg] =
+            (flappyBirdState[flappyBirdRotationDeg] as double) + playerVelRot;
+        //update the height
+        if (playerVelY < playerMaxVelY &&
+            !(flappyBirdState[flappyBirdIsJumping] as bool)) {
+          playerVelY += playerAccY;
+        }
+        if ((flappyBirdState[flappyBirdIsJumping] as bool)) {
+          flappyBirdState[flappyBirdIsJumping] = false;
+        }
+        flappyBirdState[flappyBirdY] = min(
+            gameAreaHeight - flappyBirdDimen['y']!,
+            (flappyBirdState[flappyBirdY] as double) + playerVelY.toDouble());
 
-
+        break;
+      case GameState.ending:
+        //update rotation
+        flappyBirdState[flappyBirdRotationDeg] =
+            (flappyBirdState[flappyBirdRotationDeg] as double) + playerVelRot;
+        if ((flappyBirdState[flappyBirdRotationDeg] as double) >= 90) {
+          flappyBirdState[flappyBirdRotationDeg] = 90.0;
+        }
+        visibleRotation = playerRotThr.toDouble();
+        if ((flappyBirdState[flappyBirdRotationDeg] as double) >=
+            playerRotThr) {
+          visibleRotation = flappyBirdState[flappyBirdRotationDeg] as double;
+        }
+        flappyBirdState[flappyBirdRotationDeg] =
+            (flappyBirdState[flappyBirdRotationDeg] as double) +
+                playerVelRot +
+                1.8; //rotate faster when falling
+        //update height
+        if ((flappyBirdState[flappyBirdIsFalling] as bool) &&
+            (flappyBirdState[flappyBirdY] as double) + 15 <=
+                gameAreaHeight - flappyBirdDimen['y']!) {
+          flappyBirdState[flappyBirdY] =
+              (flappyBirdState[flappyBirdY] as double) +
+                  20; //play ending animation
+        } else {
+          gameState = GameState.ended;
+        }
         break;
       case GameState.ended:
-        // TODO: Handle this case.
         break;
     }
   }
 
-  void checkCollision() {
+  void checkCollision() async {
     if (gameState == GameState.playing) {
       // get the bird bounds
-      final flappyBirdTop = flappybirdState[flappyBirdY] as double;
-      final flappyBirdLeft = flappybirdState[flappyBirdX] as double;
+      final flappyBirdTop = flappyBirdState[flappyBirdY] as double;
+      final flappyBirdLeft = flappyBirdState[flappyBirdX] as double;
       final flappyBirdRight = flappyBirdLeft + (flappyBirdDimen['x'] as double);
       final flappyBirdBottom = flappyBirdTop + (flappyBirdDimen['y'] as double);
-
       var isColliding = false;
-      for (int i = 0; i < pipes.length; i++) {
+      //check floor collision
+      if (flappyBirdBottom >= gameAreaHeight) {
+        // print("$flappyBirdBottom ${baseDimen['y']!}");
+        print('floor');
+        flappyBirdState[flappyBirdIsFalling] = false;
+        isColliding = true;
+      }
+      for (int i = 0; i < pipes.length && !isColliding; i++) {
+        //break the loop if colliding
         final upperPipeY = pipes[i].topHeight;
         final lowerPipeY = gameAreaHeight - pipes[i].bottomHeight;
         final pipesX = pipeLocation[i]['x'] as double;
-        print(flappybirdState);
-        //check floor collision
-        if (flappyBirdBottom >= gameAreaHeight) {
-          print("floor");
-          print("$flappyBirdBottom ${baseDimen['y']!}");
+        //check right collision
+        if (flappyBirdRight.inRange(pipesX, pipesX + 4) &&
+            (flappyBirdBottom.inRange(
+                    lowerPipeY, gameAreaHeight + flappyBirdDimen['y']!) ||
+                flappyBirdTop <= upperPipeY)) {
+          flappyBirdState[flappyBirdIsFalling] = true;
           isColliding = true;
+          break;
         }
         //check pipe collision
-        if (flappyBirdRight.inRange(pipesX, pipesX + pipeWidth)) {
+        if (flappyBirdRight.inRange(
+            pipesX, pipesX + pipeWidth + flappyBirdDimen['x']!)) {
           //check top collision
-          if (flappyBirdTop.inRange(0, upperPipeY)) {
-            print("upperPipeY:$upperPipeY");
-            print("top");
+          if (flappyBirdTop <= upperPipeY) {
+            flappyBirdState[flappyBirdIsFalling] = false;
             isColliding = true;
+            break;
           }
           //check bottom collision
-          if (flappyBirdBottom.inRange(lowerPipeY, gameAreaHeight)) {
-            print("bottom");
-            print("lowerPipeY:$lowerPipeY  $gameAreaHeight");
+          if (flappyBirdBottom >= lowerPipeY) {
+            flappyBirdState[flappyBirdIsFalling] = false;
             isColliding = true;
+            break;
           }
         }
       }
 
-      if (isColliding) wingPlayer.play(AssetSource("audio/swoosh.wav"));
+      if (isColliding) {
+        gameState = GameState.ending;
+        await playHit();
+        playDie();
+      }
     }
   }
 
-  void onGameOver() {}
+  void resetGame() {
+    gameState = GameState.playing;
+    backgroundState = BackgroundState.values[Random().nextInt(2)];
+    pipeColor = PipeColor.values[Random().nextInt(2)];
+    isUpdating = false;
+    baseShiftX = 0.0;
+
+    visibleRotation = 0;
+    playerScore = 0;
+    pipes.clear();
+    pipeLocation.clear();
+    wingPosIndex = 1;
+    flappyBirdState = {
+      flappyBirdX: flappyBirdStartingPos['x']!,
+      flappyBirdY: flappyBirdStartingPos['y']!,
+      flappyBirdRotationDeg: 0.0,
+      flappyBirdColor: BirdColor.values[Random().nextInt(3)],
+      flappyBirdFlightStage: FlightStage.mid,
+      flappyBirdIsJumping: false,
+      flappyBirdDir: 1,
+      heightToJump: 0,
+    };
+    // player velocity, max velocity, downward acceleration, acceleration on flap
+    playerVelY = -9; // player's velocity along Y, default same as playerFlapped
+  }
 }

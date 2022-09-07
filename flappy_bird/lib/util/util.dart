@@ -34,14 +34,6 @@ extension DoubleUtil on double {
   }
 
   bool inRange(double lower, double upper) => lower <= this && this <= upper;
-
-  double dp(BuildContext context) {
-    print(this);
-    final toReturn = this / MediaQuery.of(context).devicePixelRatio;
-    print(toReturn);
-    print('');
-    return toReturn;
-  }
 }
 
 double toRadians(double degrees) {
@@ -65,20 +57,19 @@ double abs(double num) => num > 0 ? num : num * -1;
 
 class Pipes {
   final PipeColor pipeColor;
-  final double _topRatio = Random().nextDouble();
-  late double topHeight;
+  final double topHeight =
+      Random().nextInt(maxPipeHeight - minPipeHeight.toInt()).toDouble() +
+          minPipeHeight;
   late double bottomHeight;
 
   Pipes(this.pipeColor);
 
-  void initDimen(){
-    topHeight = max(minPipeHeight, _topRatio * maxPipeHeight);
+  void initDimen() {
     bottomHeight = gameAreaHeight - pipeGapVertical - topHeight;
   }
 
-
   Widget drawPipe(BuildContext context) {
-    print("top:$topHeight   bottom:$bottomHeight, max:$maxPipeHeight");
+    // print("top:$topHeight   bottom:$bottomHeight, max:$maxPipeHeight");
     final uPipe = Transform.rotate(
         angle: pi,
         child: Transform.rotate(
@@ -101,9 +92,7 @@ class Pipes {
       child: Stack(
         children: [
           Positioned(top: topHeight - pipeHeight, child: uPipe),
-          Positioned(
-              bottom: bottomHeight  -pipeHeight,
-              child: lPipe)
+          Positioned(bottom: bottomHeight - pipeHeight, child: lPipe)
         ],
       ),
     );
