@@ -419,7 +419,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
       if (isColliding) {
         gameState = GameState.ending;
         await playHit();
-        playDie();
+        if (flappyBirdState[flappyBirdIsFalling] as bool) playDie();
       }
     }
   }
