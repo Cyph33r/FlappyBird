@@ -146,7 +146,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
             child: Container(
               width: min(width, screenDimen['x']!),
               height: min(height, screenDimen['y']!),
-              color: const Color(0x00000000),
+              color: Color.fromARGB(0, 228, 22, 22),
               child: Stack(
                 children: [
                   //get new background
@@ -174,12 +174,44 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                   ),
                   //todo: if game over, show the game over banner
                   //get new score
-                  if (gameState == GameState.playing ||
-                      gameState == GameState.ended)
+                  if (gameState == GameState.playing)
                     Padding(
                       padding: const EdgeInsets.only(top: 64),
                       child: drawScores(),
                     ),
+                  if (gameState == GameState.ended)
+                    IgnorePointer(
+                        ignoring: false,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 64),
+                          child: Center(
+                            child: Container(
+                              height: height/4,
+                              width: width/2,
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(blurRadius: 1, spreadRadius: 2, color: Colors.black26)]),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text("Score: " + playerScore.toString()),
+                                  ElevatedButton(
+                                      onPressed: () {
+                                        showDialog(context: context, builder: (context) {
+                                          return AlertDialog(
+                                            title: Text('Enter name'),
+                                            content: TextField(
+                                              decoration: InputDecoration(hintText: "name"),
+                                            ),
+                                          );
+                                        });
+                                      },
+                                      child: Text("Submit Score")),
+                                  ElevatedButton(onPressed: resetGame, child: Text("Try again")),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )),
+
                   // if welcome show welcome banner
                   if (gameState == GameState.welcome)
                     Positioned(
@@ -207,8 +239,13 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
         }
         break;
       case GameState.ended:
-        resetGame();
+        // showModalBottomSheet(
+        //   context: context,
+        //   builder:
+        // );
+        // resetGame();
         return;
+      // break;
       case GameState.ending:
         break;
     }
